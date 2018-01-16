@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <stack>
 
 using namespace std;
 using namespace cv;
@@ -11,9 +12,35 @@ bool state;
 bool drawing = false;
 Mat_<int> mask;
 
+stack<Mat> prevMasks;
+stack<Mat> prevImgs;
+
+Mat prevMask;
+Mat prevImg;
+
+enum States{GOOD,ACCEPTABLE,BAD,NOT_ACCEPTABLE,EXIT};
+const Scalar BLUE = Scalar(0,0,255);
+const Scalar BLUE_G = Scalar(200);
+
+const Scalar YELLOW = Scalar(255,255,0);
+const Scalar YELLOW_G = Scalar(150);
+
+const Scalar ORANGE = Scalar(200,140,0);
+const Scalar ORANGE_G = Scalar(100);
+
+const Scalar RED = Scalar(255,0,50);
+const Scalar RED_G = Scalar(50);
+
+Scalar image_color;
+Scalar mask_color;
+
 void mouseListener(int event, int x, int y, int flags, void*userdata){
     Mat &img = *((Mat*)(userdata)); // 1st cast it back, then deref
     if(event == EVENT_LBUTTONDOWN){
+
+        prevMasks.push(mask.clone());
+        prevImgs.push(img.clone());
+
         drawing = true;
         prevPt = Point(x,y);
         }
@@ -34,9 +61,17 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
     }
 
     if(event == EVENT_RBUTTONDOWN){
-        mask[y][x] = 124;
-        img.at<cv::Vec3b>(y,x)[2] = 255;
 
+        prevMasks.push(mask.clone());
+        prevImgs.push(img.clone());
+
+        mask[y][x] = mask_color[0];
+        img.at<cv::Vec3b>(y,x)[0] = image_color[2];
+        img.at<cv::Vec3b>(y,x)[1] = image_color[1];
+        img.at<cv::Vec3b>(y,x)[2] = image_color[0];
+
+        prevMask = mask.clone();
+        prevImg = img.clone();
 
         int rows = mask.rows;
         int cols = mask.cols;
@@ -48,9 +83,12 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
             for(int i = (y-offset); i < (y+offset+1);i++) {
                 for(int j = (x-offset); j < (x+offset+1);j++) {
                     if (i >= 0 && i < rows - 1 && j >= 0 && j < cols - 1 && mask[i][j] == 0) {
-                        if (mask[i - 1][ j] == 124 || mask[i + 1][ j] == 124 || mask[i][ j - 1] == 124 || mask[i][ j + 1] == 124) {
-                            mask[i][ j] = 124;
-                            img.at<cv::Vec3b>(i,j)[2] = 255;
+                        if (mask[i - 1][ j] == mask_color[0] || mask[i + 1][ j] == mask_color[0] ||
+                                mask[i][ j - 1] == mask_color[0] || mask[i][ j + 1] == mask_color[0]) {
+                            mask[i][ j] = mask_color[0];
+                            img.at<cv::Vec3b>(i,j)[0] = image_color[2];
+                            img.at<cv::Vec3b>(i,j)[1] = image_color[1];
+                            img.at<cv::Vec3b>(i,j)[2] = image_color[0];
                             flag = true;
                         }
                     }
@@ -59,16 +97,6 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
             offset++;
         }
     }
-}
-
-void showResults(Mat img){
-    Point pt2 = pt;
-    if(state)
-        cout<< "Hi";
-    else
-    if(!(pt2.x == prevPt.x && pt2.y == prevPt.y))
-        cout<< pt2;
-    prevPt = Point(pt.x,pt.y);
 }
 
 
@@ -82,7 +110,8 @@ int main(int argc, char** argv )
 
     // Variables
     Mat image;
-
+    image_color = BLUE;
+    mask_color = BLUE_G;
     image = imread( argv[1], 1 );
     //image = imread("../test3.jpg");
 
@@ -96,15 +125,56 @@ int main(int argc, char** argv )
     mask = Mat_<int>::zeros(image.rows,image.cols);
 
     namedWindow(window, WINDOW_NORMAL );
-    resizeWindow(window,1280,720);
+    resizeWindow(window,720,640);
     setMouseCallback(window,mouseListener,&image);
+
+    States state;
+
+    // initialize prev mats
+    prevMask = mask.clone();
+    image = image.clone();
+
+    prevMasks.push(mask.clone());
+    prevImgs.push(image.clone());
+
     while (true)
     {
         imshow(window, image);
 
         //showResults(image);
-        int k = waitKey(1);
-        if (k == 'q')
+        char current_state = (char)waitKey(1);
+
+        switch(current_state){
+            case 'a'://Good
+                image_color = BLUE;
+                mask_color = BLUE_G;
+                break;
+            case 's'://Acceptable
+                image_color = YELLOW;
+                mask_color = YELLOW_G;
+                break;
+            case 'd'://Bad
+                image_color = ORANGE;
+                mask_color = ORANGE_G;
+                break;
+            case 'f'://NotAcceptable
+                image_color = RED;
+                mask_color = RED_G;
+                break;
+            case 'z':
+                if (prevImgs.size() > 0) {
+                    mask = prevMasks.top();
+                    image = prevImgs.top();
+                    prevMasks.pop();
+                    prevImgs.pop();
+                }
+                break;
+            case 'q':
+                state = States::EXIT;
+                break;
+        }
+
+        if(state == States::EXIT)
             break;
     }
 

@@ -8,7 +8,6 @@ using namespace cv;
 #define window "QA"
 Point pt;
 Point prevPt;
-bool state;
 bool drawing = false;
 Mat_<int> mask;
 
@@ -18,7 +17,10 @@ stack<Mat> prevImgs;
 Mat prevMask;
 Mat prevImg;
 
-enum States{GOOD,ACCEPTABLE,BAD,NOT_ACCEPTABLE,EXIT};
+enum States{Special_Corners,Draw_Corners,Labeling,EXIT};
+
+States state;
+
 const Scalar BLUE = Scalar(0,0,255);
 const Scalar BLUE_G = Scalar(200);
 
@@ -35,6 +37,11 @@ Scalar image_color;
 Scalar mask_color;
 
 int thickness;
+
+Point cornerValues[4];
+
+const String corners[] ={"TL_corner","TR_corner","BR_corner","BL_corner",};
+int CI = 0;//Corner index
 
 void snale(Mat &img,int x,int y){
     mask[y][x] = mask_color[0];
@@ -107,11 +114,41 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
     Mat &img = *((Mat*)(userdata)); // 1st cast it back, then deref
     if(event == EVENT_LBUTTONDOWN){
 
-        prevMasks.push(mask.clone());
-        prevImgs.push(img.clone());
+        switch (state){
+            case Labeling:
+                prevMasks.push(mask.clone());
+                prevImgs.push(img.clone());
 
-        drawing = true;
-        prevPt = Point(x,y);
+                drawing = true;
+                prevPt = Point(x,y);
+                break;
+            case Special_Corners:
+                prevMasks.push(mask.clone());
+                prevImgs.push(img.clone());
+
+                if (CI < 4) {
+                    cornerValues[CI] = Point(x, y);
+                    putText(img, corners[CI], cornerValues[CI], FONT_HERSHEY_PLAIN, thickness/2, Scalar(0, 120, 120), thickness);
+                    CI++;
+                    if (CI==4)
+                        state = States ::Draw_Corners;
+                }
+                break;
+
+            case Draw_Corners:
+                for(int i =0;i<4;i++){
+                    if (i <3) {
+                        line(img, cornerValues[i], cornerValues[i + 1], Scalar(120, 120, 0));
+                        line(mask, cornerValues[i], cornerValues[i + 1], Scalar(120));
+                    }
+                    else {
+                        line(img, cornerValues[i], cornerValues[0], Scalar(120, 120, 0));
+                        line(mask, cornerValues[i], cornerValues[0], Scalar(120));
+                    }
+                }
+                break;
+        }
+
         }
     if(event == EVENT_MOUSEMOVE){
         if(drawing) {
@@ -184,8 +221,6 @@ int main(int argc, char** argv )
     resizeWindow(window,720,640);
     setMouseCallback(window,mouseListener,&image);
 
-    States state;
-
     // initialize prev mats
     prevMask = mask.clone();
     image = image.clone();
@@ -223,16 +258,34 @@ int main(int argc, char** argv )
                     image = prevImgs.top();
                     prevMasks.pop();
                     prevImgs.pop();
+
+                    if (state == Special_Corners && CI > 0) {
+                        CI--;
+                    }
+                    else if (state == Draw_Corners && CI > 0) {
+                        CI--;
+                        state = Special_Corners;
+                    }
+
                 }
                 break;
             case 'q':
                 state = States::EXIT;
+                break;
+            case 'w':
+                state = States::Labeling;
+                break;
+            case 'e':
+                state = States::Special_Corners;
+                break;
+            default:
                 break;
         }
 
         if(state == States::EXIT)
             break;
     }
+
 
     imwrite("../mask.png",mask);
     imwrite("../img.png",image);

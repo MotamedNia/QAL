@@ -5,7 +5,10 @@
 
 using namespace std;
 using namespace cv;
+
 #define window "QA"
+
+
 Point pt;
 Point prevPt;
 bool drawing = false;
@@ -14,8 +17,8 @@ Mat_<int> mask;
 stack<Mat> prevMasks;
 stack<Mat> prevImgs;
 
-Mat prevMask;
-Mat prevImg;
+Mat nextMask;
+Mat nextImg;
 
 enum States{Special_Corners,Draw_Corners,Labeling,EXIT};
 
@@ -33,6 +36,12 @@ const Scalar ORANGE_G = Scalar(100);
 const Scalar RED = Scalar(255,0,50);
 const Scalar RED_G = Scalar(50);
 
+const Scalar paperColor = Scalar(125,125,0);
+const Scalar paperColor_G = Scalar(125);
+
+const Scalar rigonColor = Scalar(0,255,0);
+const Scalar rigonColor_G = Scalar(255);
+
 Scalar image_color;
 Scalar mask_color;
 
@@ -40,7 +49,7 @@ int thickness;
 
 Point cornerValues[4];
 
-const String corners[] ={"TL_corner","TR_corner","BR_corner","BL_corner",};
+const String corners[] ={"TL","TR","BR","BL",};
 int CI = 0;//Corner index
 
 void snale(Mat &img,int x,int y){
@@ -49,8 +58,6 @@ void snale(Mat &img,int x,int y){
     img.at<cv::Vec3b>(y,x)[1] = image_color[1];
     img.at<cv::Vec3b>(y,x)[2] = image_color[0];
 
-    prevMask = mask.clone();
-    prevImg = img.clone();
 
     int rows = mask.rows;
     int cols = mask.cols;
@@ -128,7 +135,7 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
 
                 if (CI < 4) {
                     cornerValues[CI] = Point(x, y);
-                    putText(img, corners[CI], cornerValues[CI], FONT_HERSHEY_PLAIN, thickness/2, Scalar(0, 120, 120), thickness);
+                    putText(img, corners[CI], cornerValues[CI], FONT_HERSHEY_SIMPLEX, thickness/2.9, Scalar(0, 100, 255), thickness);
                     CI++;
                     if (CI==4)
                         state = States ::Draw_Corners;
@@ -138,12 +145,12 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
             case Draw_Corners:
                 for(int i =0;i<4;i++){
                     if (i <3) {
-                        line(img, cornerValues[i], cornerValues[i + 1], Scalar(120, 120, 0));
-                        line(mask, cornerValues[i], cornerValues[i + 1], Scalar(120));
+                        line(img, cornerValues[i], cornerValues[i + 1], paperColor,thickness);
+                        line(mask, cornerValues[i], cornerValues[i + 1], paperColor_G);
                     }
                     else {
-                        line(img, cornerValues[i], cornerValues[0], Scalar(120, 120, 0));
-                        line(mask, cornerValues[i], cornerValues[0], Scalar(120));
+                        line(img, cornerValues[i], cornerValues[0], paperColor,thickness);
+                        line(mask, cornerValues[i], cornerValues[0], paperColor_G);
                     }
                 }
                 break;
@@ -153,16 +160,16 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
     if(event == EVENT_MOUSEMOVE){
         if(drawing) {
             pt = Point(x, y);
-            line(img, pt, prevPt, Scalar(0, 255, 0), thickness);
-            line(mask,pt,prevPt,Scalar(255));
+            line(img, pt, prevPt, rigonColor, thickness);
+            line(mask,pt,prevPt,rigonColor_G);
             prevPt = pt;
         }
     }
     if(event == EVENT_LBUTTONUP){
         if(drawing) {
             pt = Point(x, y);
-            line(img, pt, prevPt, Scalar(0, 255, 0), thickness);
-            line(mask,pt,prevPt,Scalar(255));
+            line(img, pt, prevPt, rigonColor, thickness);
+            line(mask,pt,prevPt,rigonColor_G);
             drawing = false;
         }
     }
@@ -221,9 +228,6 @@ int main(int argc, char** argv )
     resizeWindow(window,720,640);
     setMouseCallback(window,mouseListener,&image);
 
-    // initialize prev mats
-    prevMask = mask.clone();
-    image = image.clone();
 
     prevMasks.push(mask.clone());
     prevImgs.push(image.clone());
@@ -254,6 +258,8 @@ int main(int argc, char** argv )
                 break;
             case 'z':
                 if (prevImgs.size() > 0) {
+                    nextImg = image;
+                    nextMask = mask;
                     mask = prevMasks.top();
                     image = prevImgs.top();
                     prevMasks.pop();
@@ -269,11 +275,24 @@ int main(int argc, char** argv )
 
                 }
                 break;
+            case 'y'://TODO is not complete
+                if (!nextMask.empty() && !nextImg.empty()){
+                    image = nextImg;
+                    mask = nextMask;
+                    if (state == Special_Corners && CI < 4) {
+                        CI++;
+                        if (CI == 4)
+                            state = Draw_Corners;
+                    }
+                }
+                break;
             case 'q':
                 state = States::EXIT;
                 break;
             case 'w':
                 state = States::Labeling;
+                prevImgs = stack<Mat>();
+                prevMasks = stack<Mat>();
                 break;
             case 'e':
                 state = States::Special_Corners;

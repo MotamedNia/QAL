@@ -2,7 +2,9 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <stack>
+#include "json.hpp"
 
+using json = nlohmann::json;
 using namespace std;
 using namespace cv;
 
@@ -20,7 +22,7 @@ stack<Mat> prevImgs;
 Mat nextMask;
 Mat nextImg;
 
-enum States{Special_Corners,Draw_Corners,Labeling,EXIT};
+enum States{Special_Corners,Draw_Corners,Labeling,ZOOM,EXIT};
 
 States state;
 
@@ -39,8 +41,8 @@ const Scalar RED_G = Scalar(50);
 const Scalar paperColor = Scalar(125,125,0);
 const Scalar paperColor_G = Scalar(125);
 
-const Scalar rigonColor = Scalar(0,255,0);
-const Scalar rigonColor_G = Scalar(255);
+const Scalar regionColor = Scalar(0,255,0);
+const Scalar regionColor_G = Scalar(255);
 
 Scalar image_color;
 Scalar mask_color;
@@ -122,6 +124,11 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
     if(event == EVENT_LBUTTONDOWN){
 
         switch (state){
+            case ZOOM://TODO has many bugs
+                prevMasks.push(mask.clone());
+                prevImgs.push(img.clone());
+                img = img(Rect(x-200,y-200,400,400));
+                break;
             case Labeling:
                 prevMasks.push(mask.clone());
                 prevImgs.push(img.clone());
@@ -160,16 +167,16 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
     if(event == EVENT_MOUSEMOVE){
         if(drawing) {
             pt = Point(x, y);
-            line(img, pt, prevPt, rigonColor, thickness);
-            line(mask,pt,prevPt,rigonColor_G);
+            line(img, pt, prevPt, regionColor, thickness);
+            line(mask,pt,prevPt,regionColor_G);
             prevPt = pt;
         }
     }
     if(event == EVENT_LBUTTONUP){
         if(drawing) {
             pt = Point(x, y);
-            line(img, pt, prevPt, rigonColor, thickness);
-            line(mask,pt,prevPt,rigonColor_G);
+            line(img, pt, prevPt, regionColor, thickness);
+            line(mask,pt,prevPt,regionColor_G);
             drawing = false;
         }
     }
@@ -297,6 +304,9 @@ int main(int argc, char** argv )
             case 'e':
                 state = States::Special_Corners;
                 break;
+            case 'r':
+                state = States::ZOOM;
+                break;
             default:
                 break;
         }
@@ -305,9 +315,30 @@ int main(int argc, char** argv )
             break;
     }
 
+    json data ={
+            {"mask color Information",{
+                                              {"GOOD",BLUE_G[0]},
+                                              {"ACCEPTABLE",YELLOW_G[0]},
+                                              {"BAD",ORANGE_G[0]},
+                                              {"NOT ACCEPTABLE",RED_G[0]},
+                                              {"PAPER COLOR",paperColor_G[0]},
+                                              {"REGION COLOR",regionColor_G[0]}
+                                      }},
+            {"paper coordination",{
+                                          {"TOP LEFT",{{"X",cornerValues[0].x},{"Y",cornerValues[0].y}}},
+                                          {"TOP RIGHT",{{"X",cornerValues[1].x},{"Y",cornerValues[1].y}}},
+                                          {"BOTTOM LEFT",{{"X",cornerValues[2].x},{"Y",cornerValues[2].y}}},
+                                          {"BOTTOM RIGHT",{{"X",cornerValues[3].x},{"Y",cornerValues[3].y}}}
+                                  }
 
-    imwrite("../mask.png",mask);
-    imwrite("../img.png",image);
+            }
+    };
+
+    std::ofstream o("data.json");
+    o << std::setw(4) << data << std::endl;
+
+    imwrite("mask.png",mask);
+    imwrite("img.png",image);
     return 0;
 }
 

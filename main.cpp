@@ -13,7 +13,7 @@ using namespace cv;
 
 Point pt;
 Point prevPt;
-bool drawing = false;
+bool drawing;
 Mat_<int> mask;
 
 stack<Mat> prevMasks;
@@ -22,7 +22,8 @@ stack<Mat> prevImgs;
 Mat nextMask;
 Mat nextImg;
 
-enum States{Special_Corners,Draw_Corners,Labeling,ZOOM,EXIT};
+enum States{Special_Corners,Draw_Corners,Labeling,ZOOM,EXIT, SKIP
+};
 
 States state;
 
@@ -49,12 +50,23 @@ Scalar mask_color;
 
 int thickness;
 
-Point cornerValues[4];
+Point* cornerValues;
 
 const String corners[] ={"TL","TR","BR","BL",};
 int CI = 0;//Corner index
+int II = 0;//Image index
 
-void snale(Mat &img,int x,int y){
+
+void restVars() {
+    CI =0;
+    state = States ::Special_Corners;
+    drawing = false;
+    prevImgs = stack<Mat>();
+    prevMasks = stack<Mat>();
+    cornerValues = new Point[4];
+}
+
+void snale(Mat &img, int x, int y){
     mask[y][x] = mask_color[0];
     img.at<cv::Vec3b>(y,x)[0] = image_color[2];
     img.at<cv::Vec3b>(y,x)[1] = image_color[1];
@@ -202,7 +214,7 @@ int main(int argc, char** argv )
 {
     if ( argc != 2 )
     {
-        printf("usage: DisplayImage.out <Image_Path>\n");
+        printf("usage: ./CVersion <Video_Path>\n");
         return -1;
     }
 
@@ -210,135 +222,154 @@ int main(int argc, char** argv )
     Mat image;
     image_color = BLUE;
     mask_color = BLUE_G;
-    image = imread( argv[1], 1 );
-    //image = imread("../test3.jpg");
 
-    if ( !image.data )
-    {
-        printf("No image data \n");
-        return -1;
-    }
+        //Reading Video file
+    String filePath = argv[1];
+    VideoCapture capture = VideoCapture(filePath);
 
-    // initialize mask
-    mask = Mat_<int>::zeros(image.rows,image.cols);
+    while (capture.read(image)) {
+        restVars();
+        //End process when there is no frame
+        if (!image.data) {
+            printf("No image data \n");
+            break;
+        }
 
-    int num = image.rows;
-    int dnum = 720;
+        // initialize mask
+        mask = Mat_<int>::zeros(image.rows, image.cols);
 
-    if(num < image.cols) {
-        num = image.cols;
-        dnum = 640;
-    }
-    thickness = (int)(num/dnum)*2;
+        int num = image.rows;
+        int dnum = 720;
 
-    namedWindow(window, WINDOW_NORMAL );
-    resizeWindow(window,720,640);
-    setMouseCallback(window,mouseListener,&image);
+        if (num < image.cols) {
+            num = image.cols;
+            dnum = 640;
+        }
+
+        thickness = (int) (num / dnum) * 2;
+
+        namedWindow(window, WINDOW_NORMAL);
+        resizeWindow(window, 720, 640);
+        setMouseCallback(window, mouseListener, &image);
+
+        prevMasks.push(mask.clone());
+        prevImgs.push(image.clone());
 
 
-    prevMasks.push(mask.clone());
-    prevImgs.push(image.clone());
 
-    while (true)
-    {
-        imshow(window, image);
+        while (true) {
+            imshow(window, image);
 
-        //showResults(image);
-        char current_state = (char)waitKey(1);
+            //showResults(image);
+            char current_state = (char) waitKey(1);
 
-        switch(current_state){
-            case 'a'://Good
-                image_color = BLUE;
-                mask_color = BLUE_G;
-                break;
-            case 's'://Acceptable
-                image_color = YELLOW;
-                mask_color = YELLOW_G;
-                break;
-            case 'd'://Bad
-                image_color = ORANGE;
-                mask_color = ORANGE_G;
-                break;
-            case 'f'://NotAcceptable
-                image_color = RED;
-                mask_color = RED_G;
-                break;
-            case 'z':
-                if (prevImgs.size() > 0) {
-                    nextImg = image;
-                    nextMask = mask;
-                    mask = prevMasks.top();
-                    image = prevImgs.top();
-                    prevMasks.pop();
-                    prevImgs.pop();
+            switch (current_state) {
+                case 'a'://Good
+                    image_color = BLUE;
+                    mask_color = BLUE_G;
+                    break;
+                case 's'://Acceptable
+                    image_color = YELLOW;
+                    mask_color = YELLOW_G;
+                    break;
+                case 'd'://Bad
+                    image_color = ORANGE;
+                    mask_color = ORANGE_G;
+                    break;
+                case 'f'://NotAcceptable
+                    image_color = RED;
+                    mask_color = RED_G;
+                    break;
+                case 'z':
+                    if (prevImgs.size() > 0) {
+                        nextImg = image;
+                        nextMask = mask;
+                        mask = prevMasks.top();
+                        image = prevImgs.top();
+                        prevMasks.pop();
+                        prevImgs.pop();
 
-                    if (state == Special_Corners && CI > 0) {
-                        CI--;
+                        if (state == Special_Corners && CI > 0) {
+                            CI--;
+                        } else if (state == Draw_Corners && CI > 0) {
+                            CI--;
+                            state = Special_Corners;
+                        }
+
                     }
-                    else if (state == Draw_Corners && CI > 0) {
-                        CI--;
-                        state = Special_Corners;
+                    break;
+                case 'y'://TODO is not complete
+                    if (!nextMask.empty() && !nextImg.empty()) {
+                        image = nextImg;
+                        mask = nextMask;
+                        if (state == Special_Corners && CI < 4) {
+                            CI++;
+                            if (CI == 4)
+                                state = Draw_Corners;
+                        }
                     }
+                    break;
+                case 'q':
+                    state = States::EXIT;
+                    break;
+                case 'w':
+                    state = States::Labeling;
+                    prevImgs = stack<Mat>();
+                    prevMasks = stack<Mat>();
+                    break;
+                case 'e':
+                    state = States::Special_Corners;
+                    break;
+                case 'r':
+                    state = States::ZOOM;
+                    break;
+                case 'x':
+                    state = States::SKIP;
+                    break;
+                default:
+                    break;
+            }
 
-                }
-                break;
-            case 'y'://TODO is not complete
-                if (!nextMask.empty() && !nextImg.empty()){
-                    image = nextImg;
-                    mask = nextMask;
-                    if (state == Special_Corners && CI < 4) {
-                        CI++;
-                        if (CI == 4)
-                            state = Draw_Corners;
-                    }
-                }
-                break;
-            case 'q':
-                state = States::EXIT;
-                break;
-            case 'w':
-                state = States::Labeling;
-                prevImgs = stack<Mat>();
-                prevMasks = stack<Mat>();
-                break;
-            case 'e':
-                state = States::Special_Corners;
-                break;
-            case 'r':
-                state = States::ZOOM;
-                break;
-            default:
+            if (state == States::EXIT || state == States::SKIP)
                 break;
         }
 
-        if(state == States::EXIT)
-            break;
+
+        //Increment image index(II)
+        II++;
+
+
+        if (state != States::SKIP) {
+            json data = {
+                    {"mask color Information", {
+                                                       {"GOOD",     BLUE_G[0]},
+                                                       {"ACCEPTABLE", YELLOW_G[0]},
+                                                       {"BAD",         ORANGE_G[0]},
+                                                       {"NOT ACCEPTABLE", RED_G[0]},
+                                                       {"PAPER COLOR", paperColor_G[0]},
+                                                       {"REGION COLOR", regionColor_G[0]}
+                                               }},
+                    {"paper coordination",     {
+                                                       {"TOP LEFT", {{"X", cornerValues[0].x}, {"Y", cornerValues[0].y}}},
+                                                       {"TOP RIGHT",  {{"X", cornerValues[1].x}, {"Y", cornerValues[1].y}}},
+                                                       {"BOTTOM LEFT", {{"X", cornerValues[2].x}, {"Y", cornerValues[2].y}}},
+                                                       {"BOTTOM RIGHT",   {{"X", cornerValues[3].x}, {"Y", cornerValues[3].y}}}
+                                               }
+
+                    }
+            };
+
+            std::ofstream o("outputs/"+to_string(II)+"data.json");
+            o << std::setw(4) << data << std::endl;
+
+            String imageFile = "outputs/"+to_string(II)+"img.png";
+            String maskFile = "outputs/"+to_string(II)+"mask.png";
+            imwrite(imageFile, image);
+            imwrite(maskFile, mask);
+        }
+
     }
-
-    json data ={
-            {"mask color Information",{
-                                              {"GOOD",BLUE_G[0]},
-                                              {"ACCEPTABLE",YELLOW_G[0]},
-                                              {"BAD",ORANGE_G[0]},
-                                              {"NOT ACCEPTABLE",RED_G[0]},
-                                              {"PAPER COLOR",paperColor_G[0]},
-                                              {"REGION COLOR",regionColor_G[0]}
-                                      }},
-            {"paper coordination",{
-                                          {"TOP LEFT",{{"X",cornerValues[0].x},{"Y",cornerValues[0].y}}},
-                                          {"TOP RIGHT",{{"X",cornerValues[1].x},{"Y",cornerValues[1].y}}},
-                                          {"BOTTOM LEFT",{{"X",cornerValues[2].x},{"Y",cornerValues[2].y}}},
-                                          {"BOTTOM RIGHT",{{"X",cornerValues[3].x},{"Y",cornerValues[3].y}}}
-                                  }
-
-            }
-    };
-
-    std::ofstream o("data.json");
-    o << std::setw(4) << data << std::endl;
-
-    imwrite("mask.png",mask);
-    imwrite("img.png",image);
     return 0;
 }
+
 

@@ -1,7 +1,9 @@
+#include <fstream>
 #include <stdio.h>
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <stack>
+#include <sys/stat.h>
 #include "json.hpp"
 
 using json = nlohmann::json;
@@ -212,6 +214,7 @@ void mouseListener(int event, int x, int y, int flags, void*userdata){
 
 int main(int argc, char** argv )
 {
+    mkdir("outputs",S_IRWXU|S_IRWXG|S_IRWXO);
     if ( argc != 2 )
     {
         printf("usage: ./CVersion <Video_Path>\n");

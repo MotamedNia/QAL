@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include <stack>
 #include <sys/stat.h>
+#include <math.h>
 #include "json.hpp"
 
 using json = nlohmann::json;
@@ -58,6 +59,8 @@ const String corners[] ={"TL","TR","BR","BL",};
 int CI = 0;//Corner index
 int II = 0;//Image index
 
+
+void makeupMask();
 
 void restVars() {
     CI =0;
@@ -365,6 +368,7 @@ int main(int argc, char** argv )
             std::ofstream o("outputs/"+to_string(II)+"data.json");
             o << std::setw(4) << data << std::endl;
 
+            makeupMask();
             String imageFile = "outputs/"+to_string(II)+"img.png";
             String maskFile = "outputs/"+to_string(II)+"mask.png";
             imwrite(imageFile, image);
@@ -373,6 +377,37 @@ int main(int argc, char** argv )
 
     }
     return 0;
+}
+
+void makeupMask() {
+
+    Mat temp = Mat::zeros(mask.size(),mask.type());
+
+    for (int i=0; i< mask.rows ; i++){
+        for (int j = 0; j < mask.cols; ++j) {
+            int l = 0, t = 0, b = 0, r = 0;
+
+            if (mask.at<int>(i, j) == 125 || mask.at<int>(i, j) == 255) {
+                if (i - 1 >= 0 && mask.at<int>(i-1, j) != 125 && mask.at<int>(i-1, j) != 255)
+                    l = mask.at<int>(i-1, j);
+                if (i + 1 >= 0 && mask.at<int>(i+1, j) != 125 && mask.at<int>(i+1, j)!= 255)
+                    r = mask.at<int>(i+1, j);
+                if (j - 1 >= 0 && mask.at<int>(i, j-1) != 125 && mask.at<int>(i, j-1) != 255)
+                    b = mask.at<int>(i, j-1);
+                if (j - 1 >= 0 && mask.at<int>(i, j+1) != 125 && mask.at<int>(i, j+1) != 255)
+                    t = mask.at<int>(i, j+1);
+
+                int max1 = max(l,r);
+                int max2 = max(t,b);
+                temp.at<int>(i,j) = max(max1,max2);
+            } else
+                temp.at<int>(i,j) =mask.at<int>(i,j);
+        }
+    }
+
+    mask = temp.clone();
+    temp.release();
+
 }
 
 

@@ -225,6 +225,7 @@ int main(int argc, char** argv )
     }
 
     // Variables
+    Mat refImage;
     Mat image;
     image_color = BLUE;
     mask_color = BLUE_G;
@@ -234,7 +235,10 @@ int main(int argc, char** argv )
     VideoCapture capture = VideoCapture(filePath);
 
     while (capture.read(image)) {
+
         restVars();
+        refImage.release();
+
         //End process when there is no frame
         if (!image.data) {
             printf("No image data \n");
@@ -255,13 +259,16 @@ int main(int argc, char** argv )
         thickness = (int) (num / dnum) * 2;
 
         namedWindow(window, WINDOW_NORMAL);
-        resizeWindow(window, 720, 640);
+        resizeWindow(window, 1366, 768);
         setMouseCallback(window, mouseListener, &image);
 
         prevMasks.push(mask.clone());
         prevImgs.push(image.clone());
 
-
+        //Increment image index(II)
+        II++;
+        putText(image,to_string(II),Point(40,40),FONT_HERSHEY_PLAIN,thickness/2.5,Scalar(0,100,255),thickness);
+        refImage = image.clone();
 
         while (true) {
             imshow(window, image);
@@ -341,9 +348,6 @@ int main(int argc, char** argv )
         }
 
 
-        //Increment image index(II)
-        II++;
-
 
         if (state != States::SKIP) {
             json data = {
@@ -373,6 +377,13 @@ int main(int argc, char** argv )
             String maskFile = "outputs/"+to_string(II)+"mask.png";
             imwrite(imageFile, image);
             imwrite(maskFile, mask);
+
+            String refImageFile = "outputs/"+to_string(II)+"refImg.png";
+            imwrite(refImageFile, refImage);
+        }
+        if (state == States::SKIP){
+//            String imageFile = "outputs/"+to_string(II)+"refImg.png";
+//            imwrite(imageFile, image);
         }
 
     }
